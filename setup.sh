@@ -1,7 +1,8 @@
 #!/bin/sh -e
 
-: ${TOMCAT_HOME:=/usr/share/tomcat8}
+: ${TOMCAT_HOME:=/usr/local/tomcat}
 : ${TOMCAT_SERVICE_NAME:=tomcat8}
+: ${MYSQL_HOST:=db}
 
 # download heatclinic
 git clone https://github.com/BroadleafCommerce/DemoSite.git heatclinic
@@ -20,7 +21,7 @@ rm gatling.zip
 curl -o mariadb-java-client.jar http://repo1.maven.org/maven2/org/mariadb/jdbc/mariadb-java-client/1.2.0/mariadb-java-client-1.2.0.jar
 
 # create mysql user for heatclinic
-mysql --user=root --password=password <<EOF
+mysql -u admin -pchangeme -h $MYSQL_HOST <<EOF
 create user heatclinic@localhost identified by 'heatclinic';
 create database heatclinic;
 grant all privileges on heatclinic.* to heatclinic@localhost;
@@ -30,12 +31,12 @@ EOF
 sudo cp mariadb-java-client.jar $TOMCAT_HOME/lib
 
 # install glowroot somewhere tomcat can access
-sudo unzip glowroot-dist.zip -d $TOMCAT_HOME
-sudo chown -R tomcat:tomcat $TOMCAT_HOME/glowroot
+# sudo unzip glowroot-dist.zip -d $TOMCAT_HOME
+# sudo chown -R tomcat:tomcat $TOMCAT_HOME/glowroot
 
 # install spring-instrument javaagent somewhere tomcat can access
-sudo mkdir -p $TOMCAT_HOME/heatclinic
-sudo cp heatclinic/lib/spring-instrument-*.RELEASE.jar $TOMCAT_HOME/heatclinic/spring-instrument.jar
+#sudo mkdir -p $TOMCAT_HOME/heatclinic
+#sudo cp heatclinic/lib/spring-instrument-*.RELEASE.jar $TOMCAT_HOME/heatclinic/spring-instrument.jar
 
 # install heatclinic war
 sudo cp heatclinic/site/target/mycompany.war $TOMCAT_HOME/webapps/ROOT.war
@@ -48,8 +49,8 @@ sudo chown tomcat:tomcat /broadleaf
 # build the database
 sudo cp heatclinic-createdb.properties $TOMCAT_HOME/heatclinic/heatclinic.properties
 
-jvm_args="-javaagent:$TOMCAT_HOME/heatclinic/spring-instrument.jar -XX:+UseG1GC -Druntime.environment=production -Ddatabase.url=jdbc:mysql://localhost:3306/heatclinic?useUnicode=true&characterEncoding=utf8 -Ddatabase.user=heatclinic -Ddatabase.password=heatclinic -Ddatabase.driver=org.mariadb.jdbc.Driver -Dproperty-shared-override=$TOMCAT_HOME/heatclinic/heatclinic.properties"
-echo CATALINA_OPTS=\"$jvm_args\" | sudo tee /etc/sysconfig/$TOMCAT_SERVICE_NAME > /dev/null
+jvm_args="-XX:+UseG1GC -Druntime.environment=production -Ddatabase.url=jdbc:mysql://$MYSQL_HOST:3306/heatclinic?useUnicode=true&characterEncoding=utf8 -Ddatabase.driver=org.mariadb.jdbc.Driver -Dproperty-shared-override=$TOMCAT_HOME/heatclinic/heatclinic.properties"
+echo export CATALINA_OPTS=\"$jvm_args\" > $TOMCAT_HOME/bin/setenv.sh
 
 sudo service $TOMCAT_SERVICE_NAME start
 
